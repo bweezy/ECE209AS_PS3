@@ -16,45 +16,82 @@ class TwoWheeledRobot:
 
 	def time_update(self, u):
 
-		x, y, theta_deg = self.real_state.get_state()
+		self.real_state_update(u)
+		self.estimated_state_update(u)
+
+		
+
+	def real_state_update(self, u):
+
 		w_l, w_r = u.get_input()
 
 		b = self.b
 		r = self.r
 		d_t = self.d_t
 
-		theta_rad = theta_deg * np.pi / 180.0
-		theta_new_rad = (d_t * r / b * (w_r - w_l) + theta_rad) % (2 * np.pi) 
+		### Real State Update ###
+		w_l, w_r = u.get_input()
+		w_l = w_l + np.pi / 6.0 * np.random.randn() 
+		w_r = w_r + np.pi / 6.0 * np.random.randn()
+
+		x, y, theta = self.real_state.get_state()
+
+		theta_new = (d_t * r / b * (w_r - w_l) + theta) % (2 * np.pi) 
+		#print 'real theta_new ',
+		#print theta_new * 180.0 / np.pi
 
 		if w_r == w_l:
-			x = x + r * w_r * d_t
-			y = y + r * w_r * d_t
+			x = x + r * w_r * d_t * np.cos(theta)
+			y = y + r * w_r * d_t * np.sin(theta)
 			df0_dtheta = 0
 			df1_dtheta = 0
 		else:
 			R = b / 2.0 * (w_r - w_l)/(w_r - w_l)
-			x = x + R * (np.sin(theta_new_rad) - np.sin(theta_rad))
-			y = y - R * (np.cos(theta_new_rad) - np.cos(theta_rad))
+			x = x + R * (np.sin(theta_new) - np.sin(theta))
+			y = y - R * (np.cos(theta_new) - np.cos(theta))
 
-			df0_dtheta = R * (np.cos(theta_new_rad) - np.cos(theta_rad))
-			df1_dtheta = R * ( -1.0 * np.sin(theta_new_rad) + np.sin(theta_rad))
+		self.real_state = state.State(x, y, theta_new)
 
-		theta_deg = theta_new_rad * 180.0 / np.pi
-		self.real_state = state.State(x, y, theta_deg)
-		self.estimated_state_mean = state.State(x, y, theta_deg)
+
+	def estimated_state_update(self, u):
+
+		w_l, w_r = u.get_input()
+
+		b = self.b
+		r = self.r
+		d_t = self.d_t
+
+		x, y, theta = self.estimated_state_mean.get_state()
+		theta_new = (d_t * r / b * (w_r - w_l) + theta) % (2 * np.pi) 
+
+		print 'estimated theta_new ',
+		print theta_new * 180.0 / np.pi
+
+		if w_r == w_l:
+			x = x + r * w_r * d_t * np.cos(theta)
+			y = y + r * w_r * d_t * np.sin(theta)
+			df0_dtheta = 0
+			df1_dtheta = 0
+		else:
+			R = b / 2.0 * (w_r - w_l)/(w_r - w_l)
+			x = x + R * (np.sin(theta_new) - np.sin(theta))
+			y = y - R * (np.cos(theta_new) - np.cos(theta))
+			
+			df0_dtheta = R * (np.cos(theta_new) - np.cos(theta))
+			df1_dtheta = R * ( -1.0 * np.sin(theta_new) + np.sin(theta))
 
 		F = np.eye(3)
 		F[0][2] = df0_dtheta
 		F[1][2] = df1_dtheta
-
+		self.estimated_state_mean = state.State(x, y, theta_new)
 		self.covariance = F.dot(self.covariance).dot(F.T)
+		
 
 
 	# This is super Brute Force, should be a better way
 	def measurement_update(self):
 
-		x, y, theta_deg = self.real_state.get_state()
-		theta_rad = theta_deg * np.pi / 180.0
+		x, y, theta = self.real_state.get_state()
 
 		y_t, front_wall_idx, right_wall_idx = self.measure()
 		# Right here we are currently returning which walls the sensors are measuring
@@ -63,51 +100,58 @@ class TwoWheeledRobot:
 
 		df, dr = y_t.get_measurement()
 
+		H = self.get_observation_jacobian(x, y, theta, front_wall_idx, right_wall_idx)
+
+		
+
+
+		
+	def get_observation_jacobian(self, x, y, theta, front_wall_idx, right_wall_idx):
+
 		# Derivative of df with respect to x assuming that f is seeing the front wall
 		# Can save a lot of computation time if we just compute all cos values up front
-		ddf1_dx = -1.0 / np.cos(theta_rad)
+		ddf1_dx = -1.0 / np.cos(theta)
 		ddf2_dx = 0
-		ddf3_dx = 1.0 / np.cos(theta_rad - np.pi)
+		ddf3_dx = 1.0 / np.cos(theta - np.pi)
 		ddf4_dx = 0
 		ddf_dx = [ddf1_dx, ddf2_dx, ddf3_dx, ddf4_dx]
 
 
 		ddf1_dy = 0
-		ddf2_dy = -1.0 / np.cos(theta_rad - np.pi / 2.0)
+		ddf2_dy = -1.0 / np.cos(theta - np.pi / 2.0)
 		ddf3_dy = 0
-		ddf4_dy = 1.0 / np.cos(theta_rad - np.pi * 3.0 / 2.0)
+		ddf4_dy = 1.0 / np.cos(theta - np.pi * 3.0 / 2.0)
 		ddf_dy = [ddf1_dy, ddf2_dy, ddf3_dy, ddf4_dy]
 
-		ddf1_dtheta = (500 - x) * np.tan(theta_rad) / np.cos(theta_rad)
-		ddf2_dtheta = (750 - y) * np.tan(theta_rad - np.pi / 2.0) / np.cos(theta_rad - np.pi / 2.0)
-		ddf3_dtheta = x * np.tan(theta_rad - np.pi) / np.cos(theta_rad - np.pi)
-		ddf4_dtheta = y * np.tan(theta_rad - np.pi * 3.0 / 2.0) / np.cos(theta_rad - np.pi * 3.0 / 2.0)
+		ddf1_dtheta = (500 - x) * np.tan(theta) / np.cos(theta)
+		ddf2_dtheta = (750 - y) * np.tan(theta - np.pi / 2.0) / np.cos(theta - np.pi / 2.0)
+		ddf3_dtheta = x * np.tan(theta - np.pi) / np.cos(theta - np.pi)
+		ddf4_dtheta = y * np.tan(theta - np.pi * 3.0 / 2.0) / np.cos(theta - np.pi * 3.0 / 2.0)
 		ddf_dtheta = [ddf1_dtheta, ddf2_dtheta, ddf3_dtheta, ddf4_dtheta]
 
-		ddr1_dx = -1.0 / np.cos(theta_rad - np.pi / 2.0)
+		ddr1_dx = -1.0 / np.cos(theta - np.pi / 2.0)
 		ddr2_dx = 0
-		ddr3_dx = 1.0 / np.cos(theta_rad - np.pi * 3.0 / 2.0)
+		ddr3_dx = 1.0 / np.cos(theta - np.pi * 3.0 / 2.0)
 		ddr4_dx = 0
 		ddr_dx = [ddr1_dx, ddr2_dx, ddr3_dx, ddr4_dx]
 
 		ddr1_dy = 0
-		ddr2_dy = -1.0 / np.cos(theta_rad - np.pi)
+		ddr2_dy = -1.0 / np.cos(theta - np.pi)
 		ddr3_dy = 0
-		ddr4_dy = 1.0 / np.cos(theta_rad)
+		ddr4_dy = 1.0 / np.cos(theta)
 		ddr_dy = [ddr1_dy, ddr2_dy, ddr3_dy, ddr4_dy]
 
-		ddr1_dtheta = (500 - x) * np.tan(theta_rad - np.pi / 2.0) / np.cos(theta_rad - np.pi / 2.0)
-		ddr2_dtheta = (750 - y) * np.tan(theta_rad - np.pi) / np.cos(theta_rad - np.pi)
-		ddr3_dtheta = x * np.tan(theta_rad - np.pi * 3.0 / 2.0) / np.cos(theta_rad - np.pi * 3.0 / 2.0)
-		ddr4_dtheta = y * np.tan(theta_rad) / np.cos(theta_rad)
+		ddr1_dtheta = (500 - x) * np.tan(theta - np.pi / 2.0) / np.cos(theta - np.pi / 2.0)
+		ddr2_dtheta = (750 - y) * np.tan(theta - np.pi) / np.cos(theta - np.pi)
+		ddr3_dtheta = x * np.tan(theta - np.pi * 3.0 / 2.0) / np.cos(theta - np.pi * 3.0 / 2.0)
+		ddr4_dtheta = y * np.tan(theta) / np.cos(theta)
 		ddr_dtheta = [ddr1_dtheta, ddr2_dtheta, ddr3_dtheta, ddr4_dtheta]
 
 		# Jacobian
 		H = np.array([[ddf_dx[front_wall_idx - 1], ddf_dy[front_wall_idx - 1], ddf_dtheta[front_wall_idx - 1]],
 		[ddr_dx[right_wall_idx - 1], ddr_dy[right_wall_idx - 1], ddr_dtheta[right_wall_idx - 1]]])
 
-
-		print H
+		return H
 
 
 
@@ -125,13 +169,12 @@ class TwoWheeledRobot:
 		#         ---------------- 
 		#            4 (bottom)
 
-		x, y, theta_deg = self.real_state.get_state()
-		theta_rad = theta_deg * np.pi / 180.0
+		x, y, theta = self.real_state.get_state()
 
-		dr1 = (500 - x) / np.cos(theta_rad - np.pi / 2.0)
-		dr2 = (750 - y) / np.cos(theta_rad - np.pi)
-		dr3 = x / np.cos(theta_rad - np.pi * 3.0 / 2.0)
-		dr4 = y / np.cos(theta_rad)
+		dr1 = (500 - x) / np.cos(theta - np.pi / 2.0)
+		dr2 = (750 - y) / np.cos(theta - np.pi)
+		dr3 = x / np.cos(theta - np.pi * 3.0 / 2.0)
+		dr4 = y / np.cos(theta)
 
 		dr = [dr1, dr2, dr3, dr4]
 		min_pos_dr = float("inf")
@@ -142,10 +185,10 @@ class TwoWheeledRobot:
 				min_pos_dr = dr[i]
 				right_wall_idx = i + 1
 
-		df1 = (500 - x) / np.cos(theta_rad)
-		df2 = (750 - y) / np.cos(theta_rad - np.pi / 2.0)
-		df3 = (x) / np.cos(theta_rad - np.pi)
-		df4 = (y) / np.cos(theta_rad - np.pi * 3.0 / 2.0)
+		df1 = (500 - x) / np.cos(theta)
+		df2 = (750 - y) / np.cos(theta - np.pi / 2.0)
+		df3 = (x) / np.cos(theta - np.pi)
+		df4 = (y) / np.cos(theta - np.pi * 3.0 / 2.0)
 
 		df = [df1, df2, df3, df4]
 		min_pos_df = float("inf")
