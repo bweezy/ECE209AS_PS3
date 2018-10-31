@@ -9,9 +9,9 @@ u = Input.Input(1.1,1)
 
 robot.time_update(u)
 
-#print robot.real_state.get_state_degrees()
+print robot.real_state.get_state_degrees()
 
 print robot.estimated_state_mean.get_state_degrees()
-#print robot.covariance
+print robot.covariance
 
 robot.measurement_update()

@@ -13,13 +13,15 @@ class TwoWheeledRobot:
 		self.covariance = np.eye(3) 
 		self.d_t = 1.0/f_s
 
+		self.Q = np.eye(2) * (np.pi / 6.0)**2 
+		self.R = np.eye(2) * ()
+
 
 	def time_update(self, u):
 
 		self.real_state_update(u)
 		self.estimated_state_update(u)
 
-		
 
 	def real_state_update(self, u):
 
@@ -35,18 +37,13 @@ class TwoWheeledRobot:
 		w_r = w_r + np.pi / 6.0 * np.random.randn()
 
 		x, y, theta = self.real_state.get_state()
-
 		theta_new = (d_t * r / b * (w_r - w_l) + theta) % (2 * np.pi) 
-		#print 'real theta_new ',
-		#print theta_new * 180.0 / np.pi
 
 		if w_r == w_l:
 			x = x + r * w_r * d_t * np.cos(theta)
 			y = y + r * w_r * d_t * np.sin(theta)
-			df0_dtheta = 0
-			df1_dtheta = 0
 		else:
-			R = b / 2.0 * (w_r - w_l)/(w_r - w_l)
+			R = b / 2.0 * (w_r + w_l)/(w_r - w_l)
 			x = x + R * (np.sin(theta_new) - np.sin(theta))
 			y = y - R * (np.cos(theta_new) - np.cos(theta))
 
@@ -64,19 +61,15 @@ class TwoWheeledRobot:
 		x, y, theta = self.estimated_state_mean.get_state()
 		theta_new = (d_t * r / b * (w_r - w_l) + theta) % (2 * np.pi) 
 
-		print 'estimated theta_new ',
-		print theta_new * 180.0 / np.pi
-
 		if w_r == w_l:
 			x = x + r * w_r * d_t * np.cos(theta)
 			y = y + r * w_r * d_t * np.sin(theta)
 			df0_dtheta = 0
 			df1_dtheta = 0
 		else:
-			R = b / 2.0 * (w_r - w_l)/(w_r - w_l)
+			R = b / 2.0 * (w_r + w_l)/(w_r - w_l)
 			x = x + R * (np.sin(theta_new) - np.sin(theta))
 			y = y - R * (np.cos(theta_new) - np.cos(theta))
-			
 			df0_dtheta = R * (np.cos(theta_new) - np.cos(theta))
 			df1_dtheta = R * ( -1.0 * np.sin(theta_new) + np.sin(theta))
 
@@ -101,6 +94,8 @@ class TwoWheeledRobot:
 		df, dr = y_t.get_measurement()
 
 		H = self.get_observation_jacobian(x, y, theta, front_wall_idx, right_wall_idx)
+
+
 
 		
 
