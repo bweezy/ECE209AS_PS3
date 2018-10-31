@@ -10,11 +10,11 @@ class TwoWheeledRobot:
 		self.r = r # Radius of wheels
 		self.real_state = initial_state
 		self.estimated_state_mean = initial_state
-		self.covariance = np.eye(3) 
+		self.covariance = np.zeros((3,3)) 
 		self.d_t = 1.0/f_s
 
-		self.Q = np.eye(2) * (np.pi / 6.0)**2 
-		self.R = np.eye(2) * ()
+		self.Q = np.eye(2) * (np.pi / 6.0) ** 2 
+		self.R = np.eye(2) * (9.375) ** 2
 
 
 	def time_update(self, u):
@@ -76,8 +76,32 @@ class TwoWheeledRobot:
 		F = np.eye(3)
 		F[0][2] = df0_dtheta
 		F[1][2] = df1_dtheta
+		W = self.get_process_noise_jacobian(u)
 		self.estimated_state_mean = state.State(x, y, theta_new)
-		self.covariance = F.dot(self.covariance).dot(F.T)
+		self.covariance = F.dot(self.covariance).dot(F.T) + W.dot(self.Q).dot(W.T)
+
+
+	def get_process_noise_jacobian(self, u):
+
+		b = self.b
+		r = self.r
+		w_l, w_r = u.get_input()
+		x, y, theta = self.estimated_state_mean.get_state()
+
+		cos = np.cos(r / b * (w_r - w_l) + theta)
+		sin = np.sin(r / b * (w_r - w_l) + theta)
+		
+		dx_dwl = b / r * w_r / (w_r - w_l)**2 * sin - (w_r + w_l) / (2 * (w_r - w_l)) * cos - b / r * w_r / (w_r - w_l)**2 * np.sin(theta) 
+		dx_dwr = -1.0 * b / r * w_l / (w_r - w_l)**2 * sin + (w_r + w_l) / (2 * (w_r - w_l)) * cos + b / r * w_l / (w_r - w_l)**2 * np.sin(theta) 
+
+		dy_dwl = b / r * w_r / (w_r - w_l)**2 * cos + (w_r + w_l) / (2 * (w_r - w_l)) * sin - b / r * w_r / (w_r - w_l)**2 * np.cos(theta) 
+		dy_dwr = -1.0 * b / r * w_l / (w_r - w_l)**2 * cos - (w_r + w_l) / (2 * (w_r - w_l)) * sin + b / r * w_l / (w_r - w_l)**2 * np.cos(theta)
+
+		dtheta_dwl = -1.0 * r / b
+		dtheta_dwr = -1.0 * r / b
+
+		W = np.array([[dx_dwl, dx_dwr], [dy_dwl, dy_dwr], [dtheta_dwl, dtheta_dwr]])
+		return W
 		
 
 
@@ -86,18 +110,33 @@ class TwoWheeledRobot:
 
 		x, y, theta = self.real_state.get_state()
 
-		y_t, front_wall_idx, right_wall_idx = self.measure()
+		y_t, front_wall_idx, right_wall_idx = self.measure(self.real_state)
 		# Right here we are currently returning which walls the sensors are measuring
 		# This helps us use the correct measurement model to compute the Jacobian
 		# I think this is technically cheating -> should maybe compute all jacobians and choose one with lowest estimation error?
-
-		df, dr = y_t.get_measurement()
-
 		H = self.get_observation_jacobian(x, y, theta, front_wall_idx, right_wall_idx)
 
+		y_t = (np.array([y_t.get_measurement()]) + np.random.randn() * (9.375)).T
+		predicted_y_t, _, _ = self.measure(self.estimated_state_mean)
+		predicted_y_t = np.array([predicted_y_t.get_measurement()]).T
 
+	
+		sigma_m = self.covariance
+		inv_mat = np.linalg.inv(H.dot(sigma_m).dot(H.T) + self.R)
 
-		
+		x_hat = np.array([self.estimated_state_mean.get_state()]).T
+
+		#print sigma_m.shape
+		#print H.T.shape
+		#print inv_mat.shape
+		#print y_t.shape
+		#print x_hat.shape
+		# Update Step
+		x_hat += sigma_m.dot(H.T).dot(inv_mat).dot((y_t - predicted_y_t))
+		self.covariance = sigma_m - sigma_m.dot(H.T).dot(inv_mat).dot(H).dot(sigma_m)
+
+		x_hat = np.squeeze(x_hat)
+		self.estimated_state_mean = state.State(x_hat[0], x_hat[1], x_hat[2])
 
 
 		
@@ -150,7 +189,7 @@ class TwoWheeledRobot:
 
 
 
-	def measure(self):
+	def measure(self, state_in):
 
 		# Define walls:
 		#             2 (top)
@@ -164,7 +203,7 @@ class TwoWheeledRobot:
 		#         ---------------- 
 		#            4 (bottom)
 
-		x, y, theta = self.real_state.get_state()
+		x, y, theta = state_in.get_state()
 
 		dr1 = (500 - x) / np.cos(theta - np.pi / 2.0)
 		dr2 = (750 - y) / np.cos(theta - np.pi)
