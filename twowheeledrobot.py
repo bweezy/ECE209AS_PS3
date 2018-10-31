@@ -88,14 +88,21 @@ class TwoWheeledRobot:
 		w_l, w_r = u.get_input()
 		x, y, theta = self.estimated_state_mean.get_state()
 
-		cos = np.cos(r / b * (w_r - w_l) + theta)
-		sin = np.sin(r / b * (w_r - w_l) + theta)
-		
-		dx_dwl = b / r * w_r / (w_r - w_l)**2 * sin - (w_r + w_l) / (2 * (w_r - w_l)) * cos - b / r * w_r / (w_r - w_l)**2 * np.sin(theta) 
-		dx_dwr = -1.0 * b / r * w_l / (w_r - w_l)**2 * sin + (w_r + w_l) / (2 * (w_r - w_l)) * cos + b / r * w_l / (w_r - w_l)**2 * np.sin(theta) 
+		if w_r == w_l:
+			dx_dwl = r * w_l / (2.0 * b) * np.sin(theta)
+			dx_dwr = -1.0 * r * w_r / (2.0 * b) * np.sin(theta)
+			dy_dwl = r * w_l / (2.0 * b) * np.cos(theta)
+			dy_dwr = -1.0 * r * w_r / (2.0 * b) * np.cos(theta)
 
-		dy_dwl = b / r * w_r / (w_r - w_l)**2 * cos + (w_r + w_l) / (2 * (w_r - w_l)) * sin - b / r * w_r / (w_r - w_l)**2 * np.cos(theta) 
-		dy_dwr = -1.0 * b / r * w_l / (w_r - w_l)**2 * cos - (w_r + w_l) / (2 * (w_r - w_l)) * sin + b / r * w_l / (w_r - w_l)**2 * np.cos(theta)
+		else:
+			cos = np.cos(r / b * (w_r - w_l) + theta)
+			sin = np.sin(r / b * (w_r - w_l) + theta)
+			
+			dx_dwl = b / r * w_r / (w_r - w_l)**2 * sin - (w_r + w_l) / (2 * (w_r - w_l)) * cos - b / r * w_r / (w_r - w_l)**2 * np.sin(theta) 
+			dx_dwr = -1.0 * b / r * w_l / (w_r - w_l)**2 * sin + (w_r + w_l) / (2 * (w_r - w_l)) * cos + b / r * w_l / (w_r - w_l)**2 * np.sin(theta) 
+
+			dy_dwl = b / r * w_r / (w_r - w_l)**2 * cos + (w_r + w_l) / (2 * (w_r - w_l)) * sin - b / r * w_r / (w_r - w_l)**2 * np.cos(theta) 
+			dy_dwr = -1.0 * b / r * w_l / (w_r - w_l)**2 * cos - (w_r + w_l) / (2 * (w_r - w_l)) * sin + b / r * w_l / (w_r - w_l)**2 * np.cos(theta)
 
 		dtheta_dwl = -1.0 * r / b
 		dtheta_dwr = -1.0 * r / b
