@@ -2,7 +2,6 @@ import state
 import measurement
 import numpy as np 
 
-
 class TwoWheeledRobot:
 
 	def __init__(self, b=85.0, r=20.0, initial_state=state.State(0,0,0), f_s=1):
