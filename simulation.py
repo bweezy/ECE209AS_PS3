@@ -36,7 +36,8 @@ def run_simulation(init_state):
         # # import pdb; pdb.set_trace()
         # # print i, " iteration: "
         # # print "  ", estimated_state_mean[0], estimated_state_mean[1]
-
+        print i
+        print covariance
         plot_covariance_ellipse((estimated_state_mean[0], estimated_state_mean[1]), 
             covariance[0:2, 0:2], facecolor='k', alpha=0.3)
 
