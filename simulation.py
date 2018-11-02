@@ -20,7 +20,7 @@ def run_simulation(init_state):
     
     trajectory = []
     for i in range(15):
-        robot.time_update(Input.Input(u[0], u[1]))
+        #robot.time_update(Input.Input(u[0], u[1]))
 
         real_state = robot.real_state.get_state_degrees()
         trajectory.append(real_state)
@@ -34,7 +34,7 @@ def run_simulation(init_state):
 
         plot_covariance_ellipse((estimated_state_mean[0], estimated_state_mean[1]), 
             covariance[0:2, 0:2], facecolor='k', alpha=0.3)
-
+        robot.time_update(Input.Input(u[0], u[1]))
         robot.measurement_update()
         estimated_state_mean = robot.estimated_state_mean.get_state_degrees()
         covariance = robot.covariance
@@ -43,6 +43,7 @@ def run_simulation(init_state):
         plot_covariance_ellipse((estimated_state_mean[0], estimated_state_mean[1]), 
             covariance[0:2, 0:2], facecolor='g', alpha=0.8)
 
+    trajectory.append(robot.real_state.get_state_degrees())
     trajectory = np.array(trajectory)
     plt.plot(trajectory[:, 0], trajectory[:,1], color='k', lw=2)
     rect = patches.Rectangle((0,0),env_W,env_L,linewidth=1,edgecolor='r',facecolor='none')
